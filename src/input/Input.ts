@@ -15,14 +15,14 @@ export type ButtonName = BuiltInButton | (string & {});
  * Edges (`getKeyDown`/`getKeyUp`) roll over in `endFrame`, so every component sees the same
  * input for a frame regardless of update order.
  *
- * Its positions are the renderer's own 2D vectors (three.js's `Vector2`), made when first read.
+ * Its positions are the renderer's own 2D vectors (three.js's `Vector2`, pixi's `Point`), made when first read.
  */
 class InputClass {
   /** Pointer position in CSS pixels, relative to the attached element. */
   get mousePosition(): Vector2Of {
     return this.vector(0) as Vector2Of;
   }
-  /** Pointer position in normalized device coordinates, ready for `Raycaster.setFromCamera`. */
+  /** Pointer position in normalized device coordinates, -1 to 1 each way, y up: a ray from the camera starts there (three.js's `Raycaster.setFromCamera`). */
   get pointer(): Vector2Of {
     return this.vector(1) as Vector2Of;
   }

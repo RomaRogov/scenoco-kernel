@@ -5,6 +5,7 @@ import { claimRoot, hosts, releaseRoot } from './registry.js';
 import type { System, SystemType } from './System.js';
 import type { Node } from './types.js';
 import { nodeName } from './renderer.js';
+import { boundPort } from '../port.js';
 
 export interface RuntimeOptions {
   /** Seconds per `fixedUpdate`. Unity's default, 0.02. */
@@ -74,7 +75,7 @@ export class Runtime {
     Runtime.current = this;
   }
 
-  /** One frame: start, fixedUpdate (as many as are due), update, coroutines, lateUpdate, destroy. */
+  /** One frame: start, fixedUpdate (as many as are due), update, coroutines, the renderer's clocks, lateUpdate, destroy. */
   update(realDt: number): void {
     const unscaled = Math.min(Math.max(realDt, 0), this.maxDelta);
     const dt = unscaled * this.timeScale;
@@ -137,6 +138,9 @@ export class Runtime {
         if (i !== -1) b._coroutines!.splice(i, 1);
       }
     }
+    // The renderer's own clocks — its animations — on game time, where Unity's Animator runs: after
+    // `update`, so a behaviour's `lateUpdate` can still pose over them.
+    boundPort()?.advance?.(dt);
     for (const b of this.snapshot()) if (this.ticks(b) && b.lateUpdate) this.guard(b, 'lateUpdate', () => b.lateUpdate!(dt));
     for (const s of this.systems) if (s.lateUpdate) this.guard(s, 'lateUpdate', () => s.lateUpdate!(dt));
 

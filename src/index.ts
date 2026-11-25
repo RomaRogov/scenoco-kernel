@@ -15,6 +15,7 @@ export {
   type EditorViewport,
   type ViewportEvents,
   type Transform,
+  type ValueView,
   type View,
   type QualityAsk,
   type Vec3,

@@ -10,6 +10,7 @@ import {
   jsx,
   prefab,
   simulate,
+  Time,
   type RendererPort,
   type Simulation,
   type Tween,
@@ -48,6 +49,8 @@ class Box {
   }
 }
 class Stage extends Box {}
+/** A 2D node, as pixi's stage has them: it turns about z alone, and up is -y. */
+class Flat extends Box {}
 class Eye extends Box {}
 /** Built from one options object, as pixi's `Mesh` is: with none, it throws. */
 class Plate extends Box {
@@ -56,6 +59,27 @@ class Plate extends Box {
     super();
     this.size = options.size;
   }
+}
+/** As pixi's `AnimatedSprite`: setting its frames stops it, and `autoPlay` is its constructor's alone. */
+class Reel extends Box {
+  private list: number[] = [];
+  playing = false;
+  constructor(options: { frames?: number[]; autoPlay?: boolean } = {}) {
+    super();
+    if (options.frames) this.frames = options.frames;
+    if (options.autoPlay) this.playing = true;
+  }
+  get frames(): number[] {
+    return this.list;
+  }
+  set frames(value: number[]) {
+    this.list = value;
+    this.playing = false;
+  }
+}
+/** A game's own node class: its field is initialised after the constructor took the props. */
+class Ship extends Box {
+  speed = 1;
 }
 /** A node hosting a world of its own, outside its `children` — as pixi's `View3D` holds its 3D world as `root`. */
 class Host extends Box {
@@ -70,6 +94,8 @@ class Tint {
 }
 
 const box = (node: unknown) => node as Box;
+/** What ran in a frame, in order: behaviours' hooks and the renderer's clock. */
+const order: string[] = [];
 const port: RendererPort = {
   nodeKind: 'a Box',
   nameKey: 'label' as never,
@@ -83,6 +109,9 @@ const port: RendererPort = {
   childrenOf: (node) => (node instanceof Host ? node.root.children : box(node).children) as never,
   reparent: (parent, child) => box(parent).addChild(box(child)),
   isVisible: (node) => box(node).visible,
+  kindOf: (node) => (node instanceof Flat ? 'flat' : node.constructor.name),
+  isPlanar: (node) => node instanceof Flat,
+  upOf: (node) => (node instanceof Flat ? [0, -1, 0] : [0, 1, 0]),
   // Built from its props, as pixi's classes are; and a `Tint` child goes on its parent's list.
   construct: (type, props) => new (type as new (options: object) => object)(props),
   attachChild(parent, child) {
@@ -109,6 +138,8 @@ const port: RendererPort = {
   getScale: (node, out) => Object.assign(out, box(node).scale),
   setScale: (node, value) => void (box(node).scale = [...value]),
   lookRotation: () => [0, 0, 0, 1],
+  // Its own clock, as pixi's Ticker.shared: moved on game time.
+  advance: (dt) => void order.push(`advance ${dt.toFixed(3)}`),
   vector2: (x, y) => ({ x, y, set() {} }) as never,
   vector3: (x, y, z) => ({ x, y, z }) as never,
   quaternion: (x, y, z, w) => ({ x, y, z, w }) as never,
@@ -173,6 +204,15 @@ describe('the kernel on a renderer that is not three.js', () => {
     expect(plate.tints).toHaveLength(2);
   });
 
+  it('sets again only what the constructor left otherwise: a class field, not what it holds or alone takes', () => {
+    const frames = [1, 2, 3];
+    const reel = jsx(Reel, { frames, autoPlay: true }) as Reel;
+    expect(reel.playing).toBe(true);
+    expect(reel.frames).toBe(frames);
+    expect('autoPlay' in reel).toBe(false);
+    expect((jsx(Ship, { speed: 2 }) as Ship).speed).toBe(2);
+  });
+
   it('walks a tree whose nodes host another, as the port has it: lookups, the scene, destroy', () => {
     game = simulate(() => jsx(Stage, { children: jsx(Host, { label: 'view', children: jsx(Box, { label: 'inside', children: jsx(Spin, {}) }) }) }));
     game.step();
@@ -203,6 +243,51 @@ describe('the kernel on a renderer that is not three.js', () => {
     expect([0, 1, 2].map((i) => settableArgument(lamp, ['#ffe9c4', 1.5, 0], i))).toEqual([true, true, false]);
     applyArguments(lamp as never, ['#203040', 0.5]);
     expect([lamp.color, lamp.intensity]).toEqual(['#203040', 0.5]);
+  });
+
+  it("moves the renderer's clock on game time, after update and before lateUpdate", () => {
+    class Hooks extends Behaviour {
+      override update() {
+        order.push('update');
+      }
+      override lateUpdate() {
+        order.push('lateUpdate');
+      }
+    }
+    game = simulate(() => jsx(Stage, { children: jsx(Box, { children: jsx(Hooks, {}) }) }));
+    order.length = 0;
+    game.step();
+    expect(order).toEqual(['update', `advance ${(1 / 60).toFixed(3)}`, 'lateUpdate']);
+    Time.timeScale = 0;
+    order.length = 0;
+    game.step();
+    expect(order).toEqual(['update', 'advance 0.000', 'lateUpdate']);
+  });
+
+  it('says how to write its camera when a scene has none, and maps a camera-less world straight to the screen', () => {
+    const own = port as { cameraExample?: string; drawsWithoutCamera?: boolean };
+    game = simulate(() => jsx(Stage, {}));
+    own.cameraExample = '<Eye />';
+    expect(() => game!.worldToScreen({ x: 1, y: 2, z: 0 } as never)).toThrow('Put one in it: <Eye />');
+    own.drawsWithoutCamera = true;
+    expect(game.worldToScreen({ x: 3, y: 4 } as never)).toEqual([3, 4]);
+    delete own.cameraExample;
+    delete own.drawsWithoutCamera;
+  });
+
+  it("hops and turns a node the way its renderer's axes go: up where the port says, a 2D node about z alone", () => {
+    game = simulate(() => jsx(Stage, { children: [jsx(Flat, { label: 'flat' }), jsx(Box, { label: 'box' })] }));
+    const [flat, plain] = game.scene.children[0]!.children as unknown as Box[];
+    type Hops = { doJump(to: object, power: number, jumps: number, d: number): Tween; doPunchRotation(amount: object, d: number): Tween };
+    (flat as unknown as Hops).doJump({ x: 0, y: 0, z: 0 }, 10, 1, 1);
+    (plain as unknown as Hops).doJump({ x: 0, y: 0, z: 0 }, 10, 1, 1);
+    game.step(30);
+    expect(flat!.y).toBeLessThan(-5);
+    expect(plain!.y).toBeGreaterThan(5);
+    // A punch about x and y alone does not turn a node that turns about z only.
+    (flat as unknown as Hops).doPunchRotation({ x: 30, y: 30, z: 0 }, 0.5);
+    game.step(10);
+    expect(flat!.rotation).toEqual([0, 0, 0, 1]);
   });
 
   it("names the renderer's node in a refusal", () => {

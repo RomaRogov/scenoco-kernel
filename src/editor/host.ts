@@ -2,7 +2,7 @@ import { Behaviour } from '../kernel/Behaviour.js';
 import { assignInit } from '../kernel/init.js';
 import { behavioursOn } from '../kernel/registry.js';
 import { destroy, flushDestroyed, wake } from '../kernel/lifecycle.js';
-import { childrenOf, parentOf, traverse } from '../kernel/nodes.js';
+import { childrenOf, givenName, kindOf, parentOf, traverse } from '../kernel/nodes.js';
 import type { Node } from '../kernel/renderer.js';
 import { addMarker, applyProp, instanceKeys, isPrefab, jsxDEV } from '../jsx.js';
 import { givenOf, keepGiven, ownOf, prefabOf, remember, setGiven, sourceOf } from '../provenance.js';
@@ -14,12 +14,16 @@ import { openedScene, write, writeOpened } from './session.js';
 import { applyArguments, settableArgument } from './arguments.js';
 
 /**
- * The editor over the running game: what its interface — `@scenoco-three/editor`, served by the
- * project's `scenoco()` Vite plugin — works the game through. Paused, the renderer's viewport looks
+ * The editor over the running game: what its interface — served at `/__scenoco/editor.js` by the
+ * project's Vite plugin (`EditorPort.setUp` names it) — works the game through. Paused, the renderer's viewport looks
  * through its own camera with a gizmo; every edit is made here, the same on every renderer.
  */
 
 const EDITOR = '/__scenoco/editor.js';
+
+/** Each node's number for the editor's lists: given when first asked, kept for its life. */
+const ids = new WeakMap<object, number>();
+let nextId = 1;
 
 const spawnedNodes = new WeakSet<Node>();
 const spawnedFrom = new WeakMap<Node, Function>();
@@ -109,7 +113,8 @@ export async function startEditor(game: Game, frame: (dt: number) => void, close
       },
     }),
     import(/* @vite-ignore */ EDITOR).catch(() => {
-      throw new Error(`No editor at ${EDITOR}: the project's vite.config needs scenoco() from @scenoco-three/tools/vite, and @scenoco-three/editor installed.`);
+      const setUp = port().editor?.setUp;
+      throw new Error(`No editor at ${EDITOR}: ${setUp ? `the project needs ${setUp}` : "the renderer's editor interface is not set up in this project"}.`);
     }) as Promise<{ mount(host: EditHost): () => void }>,
   ]);
 
@@ -229,7 +234,18 @@ export async function startEditor(game: Game, frame: (dt: number) => void, close
       // A prop the element passed, or one the function declares, and not on a tag with children: they were built already.
       if (node && made && prop && (declared || name in made.props) && made.props.children === undefined) rebuild(node, { ...made.props, [name]: value });
       else if (target instanceof Behaviour) setField(target, name, value);
-      else {
+      else if (!name.includes('-') && !(name in target) && renderer.construct && givenOf(target)) {
+        // An option its constructor alone took, built from its props: a thing that is no node is built
+        // again with it and copied into itself; a live node cannot be — the file takes it, the next build shows it.
+        if (!node && renderer.canRemake?.(target)) {
+          const props = { ...givenOf(target), [name]: value } as Record<string, unknown>;
+          for (const key of ['args', 'attach', 'children', 'ref', 'key']) delete props[key];
+          renderer.remake!(target, renderer.construct(target.constructor as never, props));
+          renderer.refresh?.(target);
+        } else {
+          console.warn(`<${target.constructor.name} ${name}>: only its constructor takes ${name}, so the live one keeps the old value — saved, the scene shows it once built again (Reset).`);
+        }
+      } else {
         applyProp(target as Record<string, unknown>, name, value, target.constructor.name);
         // The tag's transform and name, kept for when one of its props calls the prefab again.
         if (made && !prop) made.props = { ...made.props, [name]: value };
@@ -242,6 +258,17 @@ export async function startEditor(game: Game, frame: (dt: number) => void, close
       if (!host.paused) host.pause();
       viewport.frame(node);
     },
+    parentOf,
+    childrenOf,
+    nameOf: givenName,
+    kindOf,
+    idOf(node) {
+      let id = ids.get(node);
+      if (id === undefined) ids.set(node, (id = nextId++));
+      return id;
+    },
+    isNode: (value): value is Node => typeof value === 'object' && value !== null && port().isNode(value),
+    describe: (value, name) => (typeof value === 'object' && value !== null ? port().describe?.(value, name) : undefined),
     close() {
       host.isolate(null);
       host.select(null);

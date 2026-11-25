@@ -125,7 +125,14 @@ export function jsx(type: unknown, props: Props | null, _key?: unknown): unknown
   // `args` are the constructor's, in order; without them the renderer may build it from its props.
   const made = args !== undefined ? new Type(...(args as unknown[])) : port().construct?.(Type as never, rest);
   const instance = (made ?? new Type()) as Record<string, unknown>;
-  for (const [key, value] of Object.entries(rest)) applyProp(instance, key, value, type.name);
+  const fromProps = args === undefined && made !== undefined;
+  for (const [key, value] of Object.entries(rest)) {
+    // Built from its props, it took them already. Set again only what it does not hold now — a class
+    // field initialised after the constructor ran overwrote it — and never what only the constructor
+    // takes: set again, pixi's `textures` would stop an `AnimatedSprite` its `autoPlay` started.
+    if (fromProps && !key.includes('-') && (!(key in instance) || instance[key] === value)) continue;
+    applyProp(instance, key, value, type.name);
+  }
   for (const child of flatten(children)) addChild(instance, child, type.name);
   if (typeof attach === 'string') ATTACH.set(instance, attach);
   if (link && typeof link === 'object' && 'current' in link) (link as Ref<unknown>).current = instance;

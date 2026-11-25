@@ -25,7 +25,7 @@ export interface EditHooks {
   /** After a frame of the game ran. */
   afterFrame(): void;
   /** After the game drew: the editor's own things, over it. */
-  draw(camera: RenderCamera): void;
+  draw(camera: RenderCamera | null): void;
 }
 
 /** @internal */

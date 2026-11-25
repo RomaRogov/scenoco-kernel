@@ -2,18 +2,16 @@ import type { Behaviour } from '../kernel/Behaviour.js';
 import type { Reach } from '../kernel/lifecycle.js';
 import type { Node } from '../kernel/renderer.js';
 import type { Source } from '../provenance.js';
-import type { SceneOf, Transform } from '../port.js';
+import type { SceneOf, Transform, ValueView } from '../port.js';
 
-export type { Transform };
-
-type Object3D = Node;
+export type { Transform, ValueView };
 
 /** What the editor's interface works the game through. */
 export interface EditHost {
   /** The scene the game draws: every loaded scene is in it. */
   readonly scene: SceneOf;
-  readonly selected: Object3D | null;
-  select(node: Object3D | null): void;
+  readonly selected: Node | null;
+  select(node: Node | null): void;
   readonly paused: boolean;
   pause(): void;
   play(): void;
@@ -36,9 +34,9 @@ export interface EditHost {
   /** What the gizmo does. */
   setMode(mode: 'translate' | 'rotate' | 'scale'): void;
   /** The selection changed. */
-  on(event: 'select', listener: (node: Object3D | null) => void): void;
+  on(event: 'select', listener: (node: Node | null) => void): void;
   /** The gizmo let go of the node it moved; `before` is its transform when the drag began. */
-  on(event: 'moved', listener: (node: Object3D, before: Transform) => void): void;
+  on(event: 'moved', listener: (node: Node, before: Transform) => void): void;
   /** Where the element that made this object was written. */
   sourceOf(made: object): Source | undefined;
   /** The attributes that element was written with. */
@@ -48,20 +46,20 @@ export interface EditHost {
    * none for a prefab `instantiate` made. Its name is often empty: `prefab(() => …)`. `added` is what the
    * tag put under the copy's root — child nodes, behaviours — the scene's own, as on a Unity prefab instance.
    */
-  madeBy(node: Object3D): {
+  madeBy(node: Node): {
     name: string; prefab: boolean; props: Readonly<Record<string, unknown>>; fn: object;
-    added: { nodes: readonly Object3D[]; behaviours: readonly Behaviour[] };
+    added: { nodes: readonly Node[]; behaviours: readonly Behaviour[] };
   } | undefined;
   /**
    * A prefab root's own element, inside the prefab — not its tag, which `sourceOf` answers for:
    * where it is written and with what. Undefined for a node no prefab made.
    */
-  own(node: Object3D): { source?: Source; given?: Readonly<Record<string, unknown>> } | undefined;
+  own(node: Node): { source?: Source; given?: Readonly<Record<string, unknown>> } | undefined;
   /** Show only `node` and what is under it — Unity's isolation — or everything again, with null. */
-  isolate(node: Object3D | null): void;
+  isolate(node: Node | null): void;
   /** Made by `instantiate` since the scene loaded, or inside something that was: nothing in a scene file wrote it. */
-  spawned(node: Object3D): boolean;
-  behavioursOn(node: Object3D): readonly Behaviour[];
+  spawned(node: Node): boolean;
+  behavioursOn(node: Node): readonly Behaviour[];
   /**
    * Set `name` on a live object the way an element does — a behaviour's field, R3F's rules for the
    * rest. A prop of a function's tag calls the function again with it, and the new node takes the
@@ -81,7 +79,25 @@ export interface EditHost {
   /** The file now says `name` is `value`: what `givenOf` answers from here on. */
   written(target: object, name: string, value: unknown): void;
   /** Point the editor's camera at a node. */
-  frame(node: Object3D): void;
+  frame(node: Node): void;
+  /** A node's parent as the renderer's tree has it — a pixi 3D world hangs from its `View3D` — or null at the top. */
+  parentOf(node: Node): Node | null;
+  /** Its children as the renderer's tree has them: the live list. */
+  childrenOf(node: Node): readonly Node[];
+  /** Its given name — three.js's `name`, pixi's `label` — or '' with none. */
+  nameOf(node: Node): string;
+  /** Its kind as the renderer names it: three.js's `type`, else its class. */
+  kindOf(node: Node): string;
+  /** A number for the node, the same for its whole life: a key for a list of them. */
+  idOf(node: Node): number;
+  /** Whether a value is one of the renderer's nodes. */
+  isNode(value: unknown): value is Node;
+  /**
+   * A live value as the inspector shows and edits it — a vector's numbers, a rotation's angles in
+   * radians, a colour's `#rrggbb` — as the renderer describes it; undefined for one shown as it is.
+   * `name` is the property it was read from.
+   */
+  describe(value: unknown, name: string): ValueView | undefined;
   close(): void;
 }
 

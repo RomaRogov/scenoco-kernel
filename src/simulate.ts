@@ -140,9 +140,11 @@ export function simulate(build: () => unknown, options: SimulateOptions = {}): S
       game.step();
     },
     worldToScreen(position) {
-      if (!camera) throw new Error('worldToScreen: the scene has no camera to see it from. Put one in it: <PerspectiveCamera position={[0, 2, 6]} />');
-      const { x, y, z } = position as { x: number; y: number; z: number };
-      const [px, py] = renderer.project(camera, [x, y, z]);
+      const { x, y, z } = position as { x: number; y: number; z?: number };
+      // Drawn with no camera, the world is the screen: a 2D stage's units are its pixels.
+      if (!camera && renderer.drawsWithoutCamera) return [x, y];
+      if (!camera) throw new Error(`worldToScreen: the scene has no camera to see it from. Put one in it${renderer.cameraExample ? `: ${renderer.cameraExample}` : '.'}`);
+      const [px, py] = renderer.project(camera, [x, y, z ?? 0]);
       return [((px + 1) / 2) * Screen.width, ((1 - py) / 2) * Screen.height];
     },
     dispose() {

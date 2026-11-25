@@ -106,7 +106,7 @@ export function play(build: () => unknown, options: PlayOptions = {} as PlayOpti
     }
     return false;
   };
-  const noCamera = 'The scene has no camera, so nothing is drawn. Put one in it, as in Unity: <PerspectiveCamera position={[0, 2, 6]} />';
+  const noCamera = `The scene has no camera, so nothing is drawn. Put one in it, as in Unity${renderer.cameraExample ? `: ${renderer.cameraExample}` : '.'}`;
   const resize = () => {
     // In development the editor's bar or panel may take part of the page: it sizes the view then.
     if (!(page && editorPort?.sizeView?.(view, host))) {
@@ -214,7 +214,7 @@ export function play(build: () => unknown, options: PlayOptions = {} as PlayOpti
     if (seen) view.render(scene, seen);
     else if (camera || !autoCamera || renderer.drawsWithoutCamera) game.render();
     else if (++framesWithoutCamera === 60) console.error(noCamera);
-    if (seen ?? camera) editor?.draw((seen ?? camera)!);
+    if (seen ?? camera ?? renderer.drawsWithoutCamera) editor?.draw(seen ?? camera);
   }
 }
 

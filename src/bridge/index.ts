@@ -136,7 +136,9 @@ export function installBridge(
   const bridge = {
     /** What this is and how to call it — the first thing to read. */
     help(): string {
-      return HELP;
+      // The renderer's own names, as its port gives them: three.js's `THREE`, pixi's `PIXI` and `PIXI3D`.
+      const own = Object.keys(port().bridgeScope ?? {});
+      return HELP.replace('SCOPE', own.length ? own.join(', ') : 'none here');
     },
     clock() {
       const held = isHeld(runtime);
@@ -349,7 +351,7 @@ Tuning — try values in the running game, then write the one that works into th
                                         plays out the same, so one call can replay a stretch per value and compare
 Reading — code is JavaScript where Player.lane is the first live Player's lane, #runner the node named "runner",
 and find(Type) / findAll(Type) / node(name) / getComponent(node, Type) and its kin / destroy / scene / camera / Time /
-Input / SceneManager / the renderer's namespace (THREE) are in scope:
+Input / SceneManager / the renderer's own names (SCOPE) are in scope:
   eval(code)                            an expression's value, or statements' return: eval("findAll(Coin).length")
   find(Type)  findAll(Type)  node(name) the live objects themselves, to read or change
   outline(depth = 4)                    the scene as text, with every behaviour's fields

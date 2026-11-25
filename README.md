@@ -67,14 +67,15 @@ Each method is documented where it is declared, in `src/port.ts`. In groups:
 
 | Group | Methods | three.js's answer |
 | --- | --- | --- |
-| Scene graph | `nodeKind`, `nameKey`, `isNode`, `add`, `reparent`, `isVisible`, `parentOf?`, `childrenOf?` | `'an Object3D'`, `'name'`, `instanceof Object3D`, `add`, `attach`, `visible`; left out, `parent` and `children` |
+| Scene graph | `nodeKind`, `nameKey`, `isNode`, `add`, `reparent`, `isVisible`, `kindOf?`, `parentOf?`, `childrenOf?` | `'an Object3D'`, `'name'`, `instanceof Object3D`, `add`, `attach`, `visible`, its `type`; left out, `parent` and `children` |
 | TSX | `construct?`, `attachChild?`, `adopt?`, `freeBuilt?` | left out: `new Type(...args)`; a geometry or material child fills its slot; what a node's elements built is disposed with it |
 | Scenes | `createScene`, `isScene`, `adoptSettings?` | `new Scene()`; a loaded scene's `background`, `fog` and `environment` move to the root |
-| Cameras and drawing | `isCamera`, `drawsWithoutCamera?`, `fitCamera`, `project`, `createView`, `applyQuality?` | aspect or orthographic width to the screen; `WebGLRenderer` as the `View` |
-| Transforms | `getPosition`, `setPosition`, `getRotation`, `setRotation`, `getScale`, `setScale`, `lookRotation` | numbers in and out: position and scale as `[x, y, z]`, rotation as a quaternion `[x, y, z, w]`, local or world. A tween calls these every frame: a getter writes into the array it is given and returns it, and a setter keeps nothing, so a running tween makes no garbage |
+| Cameras and drawing | `isCamera`, `drawsWithoutCamera?`, `cameraExample?`, `fitCamera`, `project`, `createView`, `applyQuality?` | `<PerspectiveCamera position={[0, 2, 6]} />` in the refusal a scene with no camera gets; aspect or orthographic width to the screen; `WebGLRenderer` as the `View` |
+| Clocks | `advance?` | left out: three.js has no clock its classes run on. pixi steps `Ticker.shared` by the game's `dt`, so `AnimatedSprite` and `AnimationPlayer` pause, slow down and hold with the game |
+| Transforms | `getPosition`, `setPosition`, `getRotation`, `setRotation`, `getScale`, `setScale`, `lookRotation`, `isPlanar?`, `upOf?` | numbers in and out: position and scale as `[x, y, z]`, rotation as a quaternion `[x, y, z, w]`, local or world. A tween calls these every frame: a getter writes into the array it is given and returns it, and a setter keeps nothing, so a running tween makes no garbage. Left out, no node is planar and up is +y; pixi's 2D nodes are planar, up -y |
 | Values made | `vector2`, `vector3`, `quaternion`, `color` | `new Vector2(x, y)` and so on; a colour from sRGB components |
 | Values moved and written | `values.clone`, `values.mix`, `values.sum`, `values.assign`, `eulerOf?` | `lerpVectors`, `slerpQuaternions`, `lerpColors`; `add`, or `multiply` for a quaternion; `copy` into what a property holds unless it has a `uuid`; an `Euler` is radians in its order |
-| Editor and bridge (development only) | `plain?`, `viewCamera?`, `bridgeScope?`, `refresh?`, `isDerived?`, `canRemake?`, `remake?`, `free?`, `editor?` | a vector as numbers and a colour as `#rrggbb`; a `PerspectiveCamera` for `view()`; `{ THREE }` in `eval`; `needsUpdate` and `updateProjectionMatrix`; a projection matrix; a geometry copied into itself; `dispose`; the editor's viewport |
+| Editor and bridge (development only) | `describe?`, `viewCamera?`, `bridgeScope?`, `refresh?`, `isDerived?`, `canRemake?`, `remake?`, `free?`, `editor?` | a vector as numbers, an `Euler` as angles, a colour as `#rrggbb`, for the bridge and the inspector; a `PerspectiveCamera` for `view()`; `{ THREE }` in `eval`; `needsUpdate` and `updateProjectionMatrix`; a projection matrix; a geometry copied into itself; `dispose`; the editor's viewport |
 
 A 2D renderer answers transforms in 3D terms: `z` 0, and a rotation about z as a quaternion.
 
@@ -91,9 +92,13 @@ case `assign` handles itself.
 `new Type(...args)`. Without them, the kernel builds `new Type()` and sets each prop, as R3F does,
 unless the port has `construct(type, props)`. pixi's classes take one options object, and some need
 it (`Mesh`, `NineSliceSprite`, `AnimatedSprite`). pixi-react builds them as `new Type(props)`, so a
-pixi port does the same. Declare `elementOptions: true` in `Renderer`, so an option the constructor
-alone takes type-checks as an attribute too. The kernel sets every prop afterwards all the same: array
-shorthand lands through the property's own `set`. A child that is no node and names no `attach` goes
+pixi port does the same, handing on the props its constructor takes. Declare `elementOptions: true` in
+`Renderer`, so an option the constructor alone takes type-checks as an attribute too. The kernel then
+sets a prop again only where the built object holds another value — a subclass's field initialiser
+runs after the constructor and overwrites it, and a prop the port kept back, such as array shorthand,
+lands through the property's own `set`. It skips a prop the object has no property for, which only the
+constructor takes, and one it already holds: set again, `textures` would stop the `AnimatedSprite` its
+`autoPlay` started. A child that is no node and names no `attach` goes
 to `attachChild(parent, child)`. three.js fills a geometry's or material's slot; pixi pushes a filter
 onto `filters`, as pixi-react does.
 
@@ -103,11 +108,14 @@ degrees, as DOTween does. `eulerOf` recognises the renderer's own Euler value, s
 a plain vector of radians), leaves `eulerOf` out.
 
 `createView(options, scene)` gets the game's root along with the options, because some renderers
-build their view around it (pixi's `View3D({ root })`). It returns a `View`. The view holds the
+build their view around it (pixi's `View3D({ root })`). Draw that root as it is, and never give it a
+parent such as pixi's `app.stage`: the kernel knows a running root by its having none, and the
+behaviours under a root with a parent never wake. It returns a `View`. The view holds the
 renderer's own object (`game.renderer`) and its element. Its other jobs are sizing,
 `render(scene, camera)`, and `setLoop(frame)` for a function to call every display frame. **The
 kernel owns the loop.** A renderer that draws on its own clock, like pixi's `Application` ticker,
-keeps that clock stopped and draws in `render`. Render settings that live on the view rather than on
+keeps that clock stopped and draws in `render`. A clock the renderer's own classes run on, like
+pixi's `Ticker.shared`, is stopped too and stepped in `advance(dt)` on game time. Render settings that live on the view rather than on
 a scene node (pixi's `background`, `environment`, `fog`) are carried by your scene class.
 `adoptSettings` moves them to the view when a scene loads.
 
@@ -160,8 +168,12 @@ exact version, so a game has one `Behaviour` class and one registry.
   written like any game code against the kernel's `Behaviour`, `System` and `service`.
 - **The editor (optional).** Set `editor` on the port to an `EditorPort` whose `openViewport` returns
   an `EditorViewport`: the editor's own camera, a gizmo, picking, isolation and an overlay drawn after
-  the game. It tells the kernel what the user did through `ViewportEvents`: `picked`, `dragged` and
-  `dropped`. Everything the editor does to the game is the kernel's.
+  the game — with no camera, where the renderer draws without one. It tells the kernel what the user
+  did through `ViewportEvents`: `picked`, `dragged` and `dropped`, whose `Transform` holds each part as
+  the node's attribute takes it. `setUp` says what a project adds to have the editor's interface.
+  Everything the editor does to the game is the kernel's, and the interface reads the game only
+  through `EditHost` — the tree, names, kinds and values as the port describes them — so one interface
+  serves every renderer.
 
 ## 2D and 3D in one tree
 
@@ -198,7 +210,9 @@ The port does three things for this:
 
 Transforms answer in 3D terms for a 2D node: `z` 0, its rotation a quaternion about z, in the
 renderer's own axes (pixi's y points down). So `doMove`, `doRotate` and the rest work on both kinds.
-A 2D value with no `z` is read as `z` 0.
+A 2D value with no `z` is read as `z` 0. Two port members say what is a 2D node's own: `isPlanar`
+drops a rotation tween's x and y angles for it, and `upOf` says where up is, so `doJump` hops up the
+screen on a y-down stage.
 
 ## What a model already knows, and where SceNoCo differs
 

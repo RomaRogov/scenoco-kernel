@@ -65,6 +65,12 @@ const scale = (n: Node): Part<V3> => {
 
 const onNode = (node: Node, tween: Tween) => tween.setTarget(node).setLink(node);
 
+/** A node that turns about z alone — a 2D one (`RendererPort.isPlanar`): its x and y angles are dropped. */
+const planar = (node: Node): boolean => port().isPlanar?.(node) ?? false;
+const UP: Readonly<Vec3> = [0, 1, 0];
+/** Which way is up for a node, where a jump hops (`RendererPort.upOf`): +y unless its renderer says. */
+const up = (node: Node): Readonly<Vec3> => port().upOf?.(node) ?? UP;
+
 function move(node: Node, part: Part<V3>, to: V3, duration: number): Tween {
   return onNode(node, Tween.to(part.get as () => never, part.set, to as never, duration));
 }
@@ -73,15 +79,18 @@ function axis(node: Node, part: Part<V3>, i: 0 | 1 | 2, to: number, duration: nu
   return onNode(node, Tween.to(() => part.get().getComponent(i), (v) => part.set(part.get().setComponent(i, v)), to, duration));
 }
 
-/** Angles as their type says: the renderer's own Euler is radians in its order, any other value degrees. */
-function radians(angles: Angles): { x: number; y: number; z: number; order: EulerOrder } {
+/**
+ * Angles as their type says: the renderer's own Euler is radians in its order, any other value
+ * degrees. A planar node turns about z alone.
+ */
+function radians(angles: Angles, flat: boolean): { x: number; y: number; z: number; order: EulerOrder } {
   const own = port().eulerOf?.(angles);
-  if (own) return own;
-  return { x: angles.x * DEGREE, y: angles.y * DEGREE, z: (angles.z ?? 0) * DEGREE, order: 'XYZ' };
+  const turn = own ?? { x: angles.x * DEGREE, y: angles.y * DEGREE, z: (angles.z ?? 0) * DEGREE, order: 'XYZ' as const };
+  return flat ? { x: 0, y: 0, z: turn.z, order: turn.order } : turn;
 }
 
 function rotate(node: Node, part: Part<Q4>, angles: Angles, duration: number, mode: RotateMode): Tween {
-  const to = radians(angles);
+  const to = radians(angles, planar(node));
   if (mode === RotateMode.Fast) return onNode(node, Tween.to(part.get as () => never, part.set, new Q4().setFromEuler(to.x, to.y, to.z, to.order) as never, duration));
   const q = new Q4();
   return onNode(
@@ -97,6 +106,7 @@ function rotate(node: Node, part: Part<Q4>, angles: Angles, duration: number, mo
 
 function jump(node: Node, part: Part<V3>, to: V3, power: number, jumps: number, duration: number): Tween {
   const value = new V3();
+  const [ux, uy, uz] = up(node);
   return onNode(
     node,
     new Tween(duration, () => {
@@ -104,7 +114,8 @@ function jump(node: Node, part: Part<V3>, to: V3, power: number, jumps: number, 
       return (e) => {
         value.lerpVectors(from, to, e);
         const hop = (e * jumps) % 1;
-        value.y += power * 4 * hop * (1 - hop);
+        const height = power * 4 * hop * (1 - hop);
+        value.set(value.x + ux * height, value.y + uy * height, value.z + uz * height);
         part.set(value);
       };
     }),
@@ -131,11 +142,12 @@ const added = (part: Part<V3>) => () => {
   const value = new V3();
   return (offset: V3) => part.set(value.copy(base).add(offset));
 };
-const turned = (part: Part<Q4>) => () => {
+const turned = (part: Part<Q4>, flat: boolean) => () => {
   const base = part.get().clone();
   const value = new Q4();
   const by = new Q4();
-  return (offset: V3) => part.set(value.copy(base).multiply(by.setFromEuler(offset.x * DEGREE, offset.y * DEGREE, offset.z * DEGREE)));
+  const k = flat ? 0 : DEGREE;
+  return (offset: V3) => part.set(value.copy(base).multiply(by.setFromEuler(offset.x * k, offset.y * k, offset.z * DEGREE)));
 };
 
 function punch(node: Node, begin: () => (offset: V3) => void, amount: XYZ, duration: number, vibrato: number, elasticity: number): Tween {
@@ -209,7 +221,7 @@ export function installNodeTweens(prototype: object): void {
       return punch(this, added(position(this, false)), amount, d, vibrato, elasticity);
     },
     doPunchRotation(this: Node, amount: XYZ, d: number, vibrato = 10, elasticity = 1) {
-      return punch(this, turned(rotation(this, false)), amount, d, vibrato, elasticity);
+      return punch(this, turned(rotation(this, false), planar(this)), amount, d, vibrato, elasticity);
     },
     doPunchScale(this: Node, amount: XYZ, d: number, vibrato = 10, elasticity = 1) {
       return punch(this, added(scale(this)), amount, d, vibrato, elasticity);
@@ -218,7 +230,7 @@ export function installNodeTweens(prototype: object): void {
       return shake(this, added(position(this, false)), strength, d, vibrato);
     },
     doShakeRotation(this: Node, d: number, strength: number | XYZ = 90, vibrato = 10) {
-      return shake(this, turned(rotation(this, false)), strength, d, vibrato);
+      return shake(this, turned(rotation(this, false), planar(this)), strength, d, vibrato);
     },
     doShakeScale(this: Node, d: number, strength: number | XYZ = 1, vibrato = 10) {
       return shake(this, added(scale(this)), strength, d, vibrato);

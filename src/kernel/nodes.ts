@@ -28,10 +28,9 @@ export function givenName(node: object): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** A node's kind, as its renderer names it: three.js's `type`, else its class. */
+/** A node's kind, as its renderer names it (`RendererPort.kindOf`), else its class. */
 export function kindOf(node: object): string {
-  const type = (node as { type?: unknown }).type;
-  return typeof type === 'string' ? type : node.constructor.name;
+  return boundPort()?.kindOf?.(node as Node) ?? node.constructor.name;
 }
 
 /** The first node from `root` down given `name`, or null. */

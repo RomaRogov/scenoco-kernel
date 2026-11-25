@@ -124,8 +124,10 @@ export function plain(value: unknown, depth: number): unknown {
   if (typeof value !== 'object') return String(value);
   const v = value as Record<string, unknown> & { constructor: { name: string } };
   const renderer = boundPort();
-  const own = renderer?.plain?.(value);
-  if (own !== undefined) return typeof own === 'number' ? round(own) : Array.isArray(own) ? own.map((x) => (typeof x === 'number' ? round(x) : x)) : own;
+  const own = renderer?.describe?.(value, '');
+  if (own) return own.kind === 'color' ? own.hex : own.items.map(round);
+  const legacy = renderer?.plain?.(value);
+  if (legacy !== undefined) return typeof legacy === 'number' ? round(legacy) : Array.isArray(legacy) ? legacy.map((x) => (typeof x === 'number' ? round(x) : x)) : legacy;
   if (renderer?.isNode(value)) return `<${describe(value)}>`;
   if (value instanceof Behaviour) return `<${value.constructor.name}${value.isDestroyed ? ' destroyed' : ''}>`;
   if (value instanceof Event) return `<Event, ${value.listenerCount} listener${value.listenerCount === 1 ? '' : 's'}>`;

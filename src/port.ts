@@ -109,6 +109,8 @@ export interface RendererPort {
   reparent(parent: Node, child: Node): void;
   /** Its own visibility flag: three.js's and pixi's `visible`. */
   isVisible(node: Node): boolean;
+  /** A node's kind, as messages, the bridge and the editor name it: three.js's `type` ('Mesh', 'DirectionalLight'). Left out: its class's name. */
+  kindOf?(node: Node): string;
   /**
    * A node's parent and children as the tree has them, where that is not its `parent` and `children`:
    * a renderer whose nodes host another kind of tree. pixi's `View3D` is a 2D node holding a 3D world
@@ -123,9 +125,11 @@ export interface RendererPort {
   /**
    * Build an element given no `args`, from its props — every attribute it was written with but
    * `children`, `ref`, `key` and `attach`. pixi's classes take one options object, and some need it
-   * (`Mesh`, `NineSliceSprite`), so pixi builds `new type(props)`, as pixi-react does. The kernel then
-   * sets every prop as an attribute all the same. Left out: `new type()`, three.js's way, whose
-   * constructors take arguments in order.
+   * (`Mesh`, `NineSliceSprite`), so pixi builds `new type(props)`, as pixi-react does — handing on what
+   * its constructor takes. The kernel then sets a prop again only where the object holds another value
+   * (a subclass's field initialiser overwrote it, or the port kept it back), and skips one the object
+   * has no property for, which only the constructor takes. Left out: `new type()` and every prop set,
+   * three.js's way, whose constructors take arguments in order.
    */
   construct?(type: new (...args: never[]) => object, props: Readonly<Record<string, unknown>>): object;
   /**
@@ -161,6 +165,11 @@ export interface RendererPort {
    * null when there is none, never an error. Left out: a scene needs a camera, three.js's way.
    */
   readonly drawsWithoutCamera?: boolean;
+  /**
+   * A camera as a scene writes it, for the refusal a scene with none gets: three.js's
+   * `<PerspectiveCamera position={[0, 2, 6]} />`. Left out, the refusal names no tag.
+   */
+  readonly cameraExample?: string;
   /** A camera to a screen's shape: Unity's, its height kept and its width following the screen. */
   fitCamera(camera: RenderCamera, width: number, height: number): void;
   /** Where a world position is seen by `camera`, from -1 to 1 each way, y up: normalized device coordinates. */
@@ -169,6 +178,14 @@ export interface RendererPort {
   createView(options: ViewOptionsOf, scene: SceneOf): View;
   /** Apply a quality level to a running game: scaled and turned off from how the game set its view up, which the port keeps. */
   applyQuality?(renderer: ViewOf, scene: SceneOf, level: QualityAsk): void;
+  /**
+   * The renderer's own clocks, moved `dt` game seconds — once a frame, after `update` and coroutines
+   * and before `lateUpdate`, where Unity advances its Animator. Scaled by `Time.timeScale`, 0 while
+   * paused, and not called while the clock is held or short of a frame. pixi steps `Ticker.shared` here,
+   * which its `AnimatedSprite` and @pixi/3d's `AnimationPlayer` run on — on real time otherwise, deaf to
+   * a pause. Left out: the renderer has no clock of its own.
+   */
+  advance?(dt: number): void;
 
   // --- transforms, as numbers -------------------------------------------------------------------
   // A tween reads and writes these every frame: a getter writes into `out` and returns it, and a
@@ -184,6 +201,16 @@ export interface RendererPort {
   setScale(node: Node, value: Readonly<Vec3>): void;
   /** The local rotation that turns it to face a world point. */
   lookRotation(node: Node, point: Vec3): Quat;
+  /**
+   * Whether a node turns about z alone — a 2D node, whose rotation is one angle: a rotation tween's x
+   * and y angles are dropped for it, so `doShakeRotation(0.5, 30)` shakes it about z. Left out: none is.
+   */
+  isPlanar?(node: Node): boolean;
+  /**
+   * Which way is up for a node, a unit vector in its parent's space: where `doJump` hops. three.js's
+   * `[0, 1, 0]`; pixi's 2D stage, y down, `[0, -1, 0]`. Left out: `[0, 1, 0]`.
+   */
+  upOf?(node: Node): Readonly<Vec3>;
 
   // --- values the kernel makes for a game -------------------------------------------------------
 
@@ -204,7 +231,17 @@ export interface RendererPort {
   // Only the bridge and the editor call these, and the kernel reaches both only in development. Set
   // them behind `import.meta.env.DEV`, or a production build keeps them and all they reference —
   // `bridgeScope: { THREE }` alone keeps every class three.js has.
-  /** A value as plain data, for the bridge to print: a vector's numbers, a colour's `#rrggbb`. Undefined for what it does not know. */
+  /**
+   * One of the renderer's values as plain data — what the bridge prints and the editor's inspector
+   * shows and edits: a vector's numbers, a rotation's angles in radians, a colour's `#rrggbb`. `key` is
+   * the property it is read from, for a renderer whose rotation is a plain vector (@pixi/3d's
+   * `rotation`). Undefined for anything else, which is shown as it is.
+   */
+  describe?(value: object, key: string): ValueView | undefined;
+  /**
+   * @deprecated Since 1.7.0: `describe`, which says the kind as well. A port that has only this still
+   * prints its values on the bridge; the editor's inspector needs `describe`.
+   */
   plain?(value: object): unknown;
   /** A camera the bridge draws from instead of the game's: `fov` degrees, at `from`, looking at `at`. */
   viewCamera?(fov: number, aspect: number, from: Vec3, at: Vec3): RenderCamera;
@@ -235,7 +272,23 @@ export interface EditorPort {
   openViewport(game: Game, events: ViewportEvents): Promise<EditorViewport>;
   /** Size the view to `host` while the editor lays the page out — its bar or its panel; false when neither does. */
   sizeView?(view: View, host: HTMLElement): boolean;
+  /**
+   * What a project adds to have the editor's interface, said when it cannot be loaded: three.js's
+   * `scenoco()` from `@scenoco-three/tools/vite`, with `@scenoco-three/editor` installed.
+   */
+  readonly setUp?: string;
 }
+
+/** A value as the inspector shows and edits it, and the bridge prints it. */
+export type ValueView =
+  /** A position, a scale, any vector: its numbers. */
+  | { kind: 'vector'; items: number[] }
+  /** A rotation as angles, in radians as the value holds them: the inspector shows degrees. */
+  | { kind: 'angles'; items: number[] }
+  /** A rotation as a quaternion's four numbers: printed, not edited — the inspector edits angles. */
+  | { kind: 'quaternion'; items: number[] }
+  /** A colour, as `#rrggbb`. */
+  | { kind: 'color'; hex: string };
 
 /** What a viewport tells the editor. */
 export interface ViewportEvents {
@@ -247,11 +300,15 @@ export interface ViewportEvents {
   dropped(node: Node, before: Transform): void;
 }
 
-/** A node's transform as plain numbers: rotation as angles in radians. */
+/**
+ * A node's transform when a drag began, each part as the node's attribute of that name takes it — the
+ * editor writes the one the gizmo moved back as that attribute: three.js's `[x, y, z]` arrays and Euler
+ * angles in radians; a pixi 2D node's `rotation`, one number.
+ */
 export interface Transform {
-  position: number[];
-  rotation: number[];
-  scale: number[];
+  position: unknown;
+  rotation: unknown;
+  scale: unknown;
 }
 
 /** The renderer's view of a game under the editor. */
@@ -265,8 +322,8 @@ export interface EditorViewport {
   frame(node: Node): void;
   /** Show only `node` and the way to it — Unity's isolation — or everything again with null. */
   isolate(node: Node | null): void;
-  /** After the game drew from `camera`: the gizmo, the grid, the outline, over it. */
-  draw(camera: RenderCamera): void;
+  /** After the game drew from `camera` — none, where the renderer draws without one: the gizmo, the grid, the outline, over it. */
+  draw(camera: RenderCamera | null): void;
   dispose(): void;
 }
 
