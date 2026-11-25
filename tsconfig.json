@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "ESNext.Decorators"],
+    "types": ["node"],
+    "experimentalDecorators": false,
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "isolatedModules": true,
+    // Every type annotation must be strippable: no `enum`, no `namespace`, no parameter
+    // properties. The source stays usable by plain type-stripping toolchains (node
+    // --experimental-strip-types, oxc), and an enum is spelled `const X = {…} as const` — see `KeyCode`.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "ignoreDeprecations": "6.0",
+    "skipLibCheck": true,
+    "noEmit": true,
+    // The tests import the package by its name, as a renderer's package does.
+    "paths": {
+      "@scenoco/kernel": ["./src/index.ts"],
+      "@scenoco/kernel/internal": ["./src/internal.ts"]
+    }
+  },
+  "include": ["src", "tests", "vitest.config.ts"]
+}

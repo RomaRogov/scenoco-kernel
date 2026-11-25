@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Before installing: a lockfile rewritten on one OS can drop the other OSes' native builds,
+      # and `npm ci` then installs no TypeScript compiler here. This names the missing entries.
+      - name: Lockfile names every platform build
+        run: node scripts/check-lockfile.mjs
+
+      # `ci`, not `install`: the lockfile is committed so a package published upstream cannot
+      # change what a build resolves.
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      # What npm hands out: the tarball's file list, so a missing `dist` entry shows here.
+      - run: npm pack --dry-run

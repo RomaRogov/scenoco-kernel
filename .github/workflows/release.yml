@@ -1,0 +1,52 @@
+name: Release
+
+# Publishes @scenoco/kernel at the version in `package.json`. Tag and push to fire it:
+#   git tag v1.6.0 && git push origin v1.6.0
+#
+# No token: npm trusts this workflow (trusted publishing, OIDC). The package names
+# RomaRogov/scenoco-kernel and this file, release.yml, as its publisher on npmjs.com, and npm adds a
+# provenance attestation to every version published from here. Publish this before the renderer
+# packages that depend on the same version.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # the OIDC token npm's trusted publishing exchanges for a publish
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships with npm 10.
+      - run: npm install -g npm@^11.5.1
+
+      - run: node scripts/check-lockfile.mjs
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+
+      # The tag names the version: a tag that disagrees with package.json publishes nothing.
+      - name: Tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "· $name@$version already published — skipping"
+          else
+            npm publish --access public
+          fi

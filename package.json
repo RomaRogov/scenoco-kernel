@@ -1,0 +1,56 @@
+{
+  "name": "@scenoco/kernel",
+  "version": "1.6.0",
+  "description": "SceNoCo kernel: Unity's behaviour model with no renderer — Behaviour, coroutines, events, Time, Input, tweens and TSX scenes — shared by SceNoCo's renderer packages.",
+  "keywords": [
+    "scenoco",
+    "game-engine",
+    "gamedev",
+    "unity",
+    "monobehaviour",
+    "components",
+    "coroutines",
+    "tween",
+    "tsx",
+    "scene-graph"
+  ],
+  "homepage": "https://github.com/RomaRogov/scenoco-kernel#readme",
+  "bugs": "https://github.com/RomaRogov/scenoco-kernel/issues",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RomaRogov/scenoco-kernel.git"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": true,
+  "scripts": {
+    "prebuild": "rm -rf dist",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.9",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12"
+  }
+}
