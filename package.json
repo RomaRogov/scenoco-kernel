@@ -1,6 +1,6 @@
 {
   "name": "@scenoco/kernel",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "SceNoCo kernel: Unity's behaviour model with no renderer — Behaviour, coroutines, events, Time, Input, tweens and TSX scenes — shared by SceNoCo's renderer packages.",
   "keywords": [
     "scenoco",

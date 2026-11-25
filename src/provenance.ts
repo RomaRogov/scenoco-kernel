@@ -27,7 +27,8 @@ export interface Added {
   /** Each behaviour's tag, what it said, its ref, and the behaviour it is now. */
   behaviours: { tag: object; type: Function; init: Props; link?: { current: unknown }; live: object }[];
 }
-const NOTHING_ADDED: Added = Object.freeze({ nodes: [], behaviours: [] }) as Added;
+// Pure: with `remember` dropped from a production build, this goes too.
+const NOTHING_ADDED: Added = /* @__PURE__ */ Object.freeze({ nodes: [], behaviours: [] }) as Added;
 
 /**
  * The prefab function whose element made a node, whether that element passed it attributes, and

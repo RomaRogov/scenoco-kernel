@@ -138,16 +138,6 @@ export interface RendererPort {
   adopt?(child: object, parent: object): void;
   /** A destroyed node has left its parent: free what its elements built. */
   freeBuilt?(node: Node): void;
-  /** An object was changed in place from outside the game — the editor: refresh what is derived from it (a material's shader, a camera's projection). */
-  refresh?(target: object): void;
-  /** A value worked out from an object's others — a camera's projection matrix — which the editor's argument probe passes over. */
-  isDerived?(value: object): boolean;
-  /** Whether `remake` can make this object — not a node — again in place: three.js's geometries can. */
-  canRemake?(target: object): boolean;
-  /** Make `target` what `fresh` is, in place, so every reference to it sees the change — three.js copies a geometry into itself — and free what is left over. */
-  remake?(target: object, fresh: object): void;
-  /** Free an object the editor built only to look at, and its GPU resources: three.js's `dispose`. */
-  free?(value: object): void;
 
   // --- scenes -----------------------------------------------------------------------------------
 
@@ -209,6 +199,11 @@ export interface RendererPort {
    * `Euler`. Undefined for any other value: a tween's angles are degrees then, as DOTween's are.
    */
   eulerOf?(value: object): EulerAngles | undefined;
+
+  // --- development only: the bridge and the editor --------------------------------------------
+  // Only the bridge and the editor call these, and the kernel reaches both only in development. Set
+  // them behind `import.meta.env.DEV`, or a production build keeps them and all they reference —
+  // `bridgeScope: { THREE }` alone keeps every class three.js has.
   /** A value as plain data, for the bridge to print: a vector's numbers, a colour's `#rrggbb`. Undefined for what it does not know. */
   plain?(value: object): unknown;
   /** A camera the bridge draws from instead of the game's: `fov` degrees, at `from`, looking at `at`. */
@@ -216,6 +211,16 @@ export interface RendererPort {
   /** Names the bridge's `eval` has besides the game's own: the renderer's namespace, `{ THREE }`. */
   readonly bridgeScope?: Readonly<Record<string, unknown>>;
 
+  /** An object was changed in place from outside the game — the editor: refresh what is derived from it (a material's shader, a camera's projection). */
+  refresh?(target: object): void;
+  /** A value worked out from an object's others — a camera's projection matrix — which the editor's argument probe passes over. */
+  isDerived?(value: object): boolean;
+  /** Whether `remake` can make this object — not a node — again in place: three.js's geometries can. */
+  canRemake?(target: object): boolean;
+  /** Make `target` what `fresh` is, in place, so every reference to it sees the change — three.js copies a geometry into itself — and free what is left over. */
+  remake?(target: object, fresh: object): void;
+  /** Free an object the editor built only to look at, and its GPU resources: three.js's `dispose`. */
+  free?(value: object): void;
   /** The editor over a running game in development, if the renderer has one. */
   readonly editor?: EditorPort;
 }

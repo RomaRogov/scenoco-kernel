@@ -81,7 +81,8 @@ export function jsx(type: unknown, props: Props | null, _key?: unknown): unknown
   if (!isClass(type) && !prefabs.has(type)) {
     // A plain function returning TSX: a component, as anywhere TSX is written. Its tag is its props.
     const made = (type as (p: Props) => unknown)(all);
-    remember(made, type, all);
+    // Which function made it, with what: only the editor asks, to call it again.
+    if (import.meta.env?.DEV) remember(made, type, all);
     return made;
   }
 
@@ -115,7 +116,7 @@ export function jsx(type: unknown, props: Props | null, _key?: unknown): unknown
     // this copy's, not the prefab's.
     const added = addTo(made, flatten(children), name);
     // What the tag was written with, as the editor shows it: the link and the children are the scene's, not settings.
-    remember(made, type, Object.fromEntries(Object.entries(all).filter(([k]) => k !== 'ref' && k !== 'children')), added);
+    if (import.meta.env?.DEV) remember(made, type, Object.fromEntries(Object.entries(all).filter(([k]) => k !== 'ref' && k !== 'children')), added);
     return made;
   }
 

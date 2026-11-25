@@ -1,8 +1,8 @@
 /**
  * `@scenoco/kernel/internal` — what a renderer's package and its editor reach the kernel with, and
  * games never touch: the end-of-frame flush, the registry, the held clock, the screen size, the asset
- * queue, where each element was written. The same modules as the public entry, so every class is the
- * one class.
+ * queue, where each element was written, how a live object takes new constructor arguments. The
+ * same modules as the public entry, so every class is the one class.
  */
 export * from './index.js';
 export * from './kernel/lifecycle.js';
@@ -22,3 +22,4 @@ export { loadInto, attachWorld, detachWorld, onBeforeWake, reloadActive } from '
 export { installBridge, type ObservedState } from './bridge/index.js';
 export { applyProp, isClass, isBehaviourClass, addMarker, instanceKeys, type PrefabProps, type PlainProps, type ClassProps, type PropsOf, type OptionsOf, type Settable } from './jsx.js';
 export { setField } from './editor/index.js';
+export { applyArguments, settableArgument } from './editor/arguments.js';

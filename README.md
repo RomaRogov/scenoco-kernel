@@ -74,7 +74,7 @@ Each method is documented where it is declared, in `src/port.ts`. In groups:
 | Transforms | `getPosition`, `setPosition`, `getRotation`, `setRotation`, `getScale`, `setScale`, `lookRotation` | numbers in and out: position and scale as `[x, y, z]`, rotation as a quaternion `[x, y, z, w]`, local or world. A tween calls these every frame: a getter writes into the array it is given and returns it, and a setter keeps nothing, so a running tween makes no garbage |
 | Values made | `vector2`, `vector3`, `quaternion`, `color` | `new Vector2(x, y)` and so on; a colour from sRGB components |
 | Values moved and written | `values.clone`, `values.mix`, `values.sum`, `values.assign`, `eulerOf?` | `lerpVectors`, `slerpQuaternions`, `lerpColors`; `add`, or `multiply` for a quaternion; `copy` into what a property holds unless it has a `uuid`; an `Euler` is radians in its order |
-| Editor and bridge | `refresh?`, `isDerived?`, `canRemake?`, `remake?`, `free?`, `plain?`, `viewCamera?`, `bridgeScope?`, `editor?` | `needsUpdate` and `updateProjectionMatrix`; a projection matrix; a geometry copied into itself; `dispose`; a vector as numbers and a colour as `#rrggbb`; a `PerspectiveCamera` for `view()`; `{ THREE }` in `eval`; the editor's viewport |
+| Editor and bridge (development only) | `plain?`, `viewCamera?`, `bridgeScope?`, `refresh?`, `isDerived?`, `canRemake?`, `remake?`, `free?`, `editor?` | a vector as numbers and a colour as `#rrggbb`; a `PerspectiveCamera` for `view()`; `{ THREE }` in `eval`; `needsUpdate` and `updateProjectionMatrix`; a projection matrix; a geometry copied into itself; `dispose`; the editor's viewport |
 
 A 2D renderer answers transforms in 3D terms: `z` 0, and a rotation about z as a quaternion.
 
@@ -223,6 +223,12 @@ both renderers:
 - **`@scenoco/kernel/internal` is for renderer packages and their editors.** It holds the
   end-of-frame flush, the registry, the held clock, `liveGames`, `loadInto`, `setView` and
   provenance. Games use the public entry, through your package.
+- **A production build keeps nothing of the bridge or the editor.** The kernel reaches both only when
+  `import.meta.env.DEV` is set, so a bundler drops them. The port's own development members are
+  yours to gate the same way: set them in one object behind `import.meta.env?.DEV`, as core's
+  `port.ts` does. Left ungated, they stay in every game, along with all they reference:
+  `bridgeScope: { THREE }` alone keeps every class three.js has. Build a game and read its source
+  map to check.
 - **The kernel never imports a renderer.** `npm run typecheck` checks the kernel alone. In that
   check `Renderer` is empty, so code that needs more than `BaseNode` (parent, children,
   `removeFromParent`) fails there.

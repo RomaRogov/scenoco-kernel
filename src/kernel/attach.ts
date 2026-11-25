@@ -37,7 +37,8 @@ export function addDormant<T extends Behaviour>(node: Node, type: ConstructableB
     throw new TypeError(`addComponent takes a Behaviour class — got ${String(type)}.`);
   }
   if (b._node) throw new Error(`This ${b.constructor.name} is already attached to another node.`);
-  checkHooks(b.constructor);
+  // Said while the game is written and tested, Node included; a production build has nothing left to say it to.
+  if (!import.meta.env?.PROD) checkHooks(b.constructor);
   attachDormant(node, b);
   if (init) {
     assignInit(b, init);

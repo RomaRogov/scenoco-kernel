@@ -26,6 +26,8 @@ export function broadcastMessage(node: Node, name: string, ...args: unknown[]): 
 
 /** An extension says which messages it sends, so a method named for one is no longer reported. */
 export function declareMessages(names: readonly string[]): void {
+  // Only the hook check reads it, and a production build has none.
+  if (import.meta.env?.PROD) return;
   for (const name of names) NOT_SENT.delete(name);
 }
 

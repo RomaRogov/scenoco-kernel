@@ -14,6 +14,7 @@ import {
   type Simulation,
   type Tween,
 } from '@scenoco/kernel';
+import { applyArguments, settableArgument } from '@scenoco/kernel/internal';
 
 /**
  * A renderer that is not three.js — shaped as pixi's `Container`: `addChild`, `label`, `x`/`y`/`z` —
@@ -184,6 +185,24 @@ describe('the kernel on a renderer that is not three.js', () => {
     destroy(host as never);
     game.step();
     expect(spin.gone).toBe(true);
+  });
+
+  it('sets a live object\'s constructor arguments through the properties they set, found by building it', () => {
+    /** Each argument lands on one property; the last on none the probe can name. */
+    class Lamp {
+      color: string;
+      intensity: number;
+      readonly glow: number[];
+      constructor(color = '#ffffff', intensity = 1, glow = 0) {
+        this.color = color;
+        this.intensity = intensity;
+        this.glow = [glow, glow];
+      }
+    }
+    const lamp = new Lamp('#ffe9c4', 1.5, 0);
+    expect([0, 1, 2].map((i) => settableArgument(lamp, ['#ffe9c4', 1.5, 0], i))).toEqual([true, true, false]);
+    applyArguments(lamp as never, ['#203040', 0.5]);
+    expect([lamp.color, lamp.intensity]).toEqual(['#203040', 0.5]);
   });
 
   it("names the renderer's node in a refusal", () => {
